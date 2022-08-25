@@ -25,8 +25,6 @@ def spawn_processes(fn, world_size):
 def setup(rank, world_size):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
-
-    # initialize the process group
     dist.init_process_group("gloo" if is_windows() else "nccl", rank=rank, world_size=world_size)
 
 
@@ -48,43 +46,32 @@ class RandomImagesDataloader(Dataset):
 
 
 def train(rank, world_size):
-    # declare the model
     setup(rank, world_size)
     model = resnet50(pretrained=False).to(rank)
     model = DDP(model, device_ids=[rank])
-
-    # declare the training params
     batch_sizes = [4, 8, 16, 20]
     num_epochs = 5
-
     for batch_size in batch_sizes:
-        # declare the dataloader
         dl = DataLoader(dataset=RandomImagesDataloader(),
                         batch_size=batch_size, shuffle=True,
                         num_workers=1, drop_last=True)
-
-        # declare the optimizer and loss function
         optimizer = optim.SGD(params=model.parameters(), lr=1e-3)
         loss_fn = nn.CrossEntropyLoss()
-
         t1 = time.time()
-        # the training loop
         for epoch_num in range(num_epochs):
             for batch_num, batch in enumerate(dl):
                 targets = torch.randint(size=(batch_size,), low=0, high=1000).long().to(rank)
-                batch = batch.cuda()
+                batch = batch.to(rank)
                 output = model(batch)
                 loss = loss_fn(output, targets)
                 loss.backward()
                 optimizer.step()
-
         # dealing with synchronization issues
         time.sleep(1.0)
         t2 = time.time()
-
         if rank == 0:
-            print(f"The estimated training time for {world_size} gpu/s at batch size {batch_size} is {round(t2-t1, 3)} seconds")
-
+            print(f"The estimated training time for {world_size} gpu/s at batch size "
+                  f"{batch_size} is {round(t2-t1, 3)} seconds")
     cleanup()
 
 
