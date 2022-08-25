@@ -3,7 +3,6 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.optim as optim
 from torchvision.models import resnet50
-import time
 
 
 class RandomImagesDataloader(Dataset):
@@ -20,7 +19,7 @@ class RandomImagesDataloader(Dataset):
 
 
 def sample_train(n_gpus):
-    model = resnet50(pretrained=False)
+    model = resnet50()
     # use data parallelism if there is more than one gpu
     if n_gpus > 1:
         device_ids = list(range(n_gpus))
@@ -29,26 +28,32 @@ def sample_train(n_gpus):
         model = model.cuda()
     batch_sizes = [4, 8, 16, 20]
     num_epochs = 5
+    # warmup iterations
+    for i in range(10):
+        sample_input = torch.rand(10, 3, 600, 600).cuda()
+        _ = model(sample_input)
     for batch_size in batch_sizes:
         dl = DataLoader(dataset=RandomImagesDataloader(),
                         batch_size=batch_size, shuffle=True,
                         num_workers=1, drop_last=True)
         optimizer = optim.SGD(params=model.parameters(), lr=1e-3)
         loss_fn = nn.CrossEntropyLoss()
-        t1 = time.time()
+        total_time = 0.0
         for epoch_num in range(num_epochs):
             for batch_num, batch in enumerate(dl):
+                start_event, end_event = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+                start_event.record()
                 targets = torch.randint(size=(batch_size,), low=0, high=1000).long().cuda()
                 batch = batch.cuda()
                 output = model(batch)
                 loss = loss_fn(output, targets)
                 loss.backward()
                 optimizer.step()
-        # dealing with synchronization issues
-        time.sleep(1.0)
-        t2 = time.time()
+                end_event.record()
+                torch.cuda.synchronize()
+                total_time += start_event.elapsed_time(end_event)
         print(f"The estimated training time for {num_gpus} gpu/s at batch size "
-              f"{batch_size} is {round(t2-t1, 3)} seconds")
+              f"{batch_size} is {round(total_time/1000.0, 3)} seconds")
 
 
 if __name__ == "__main__":

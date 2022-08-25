@@ -1,11 +1,11 @@
+import os
+#os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import torch.optim as optim
 from torchvision.models import resnet50
-import time
 from torch.nn.parallel import DistributedDataParallel as DDP
-import os
 import torch.distributed as dist
 from sys import platform
 import torch.multiprocessing as mp
@@ -47,31 +47,37 @@ class RandomImagesDataloader(Dataset):
 
 def train(rank, world_size):
     setup(rank, world_size)
-    model = resnet50(pretrained=False).to(rank)
+    model = resnet50().to(rank)
     model = DDP(model, device_ids=[rank])
     batch_sizes = [4, 8, 16, 20]
     num_epochs = 5
+    # warmup iterations
+    for i in range(10):
+        sample_input = torch.rand(10, 3, 600, 600).to(rank)
+        _ = model(sample_input)
     for batch_size in batch_sizes:
         dl = DataLoader(dataset=RandomImagesDataloader(),
                         batch_size=batch_size, shuffle=True,
                         num_workers=1, drop_last=True)
         optimizer = optim.SGD(params=model.parameters(), lr=1e-3)
         loss_fn = nn.CrossEntropyLoss()
-        t1 = time.time()
+        total_time = 0.0
         for epoch_num in range(num_epochs):
             for batch_num, batch in enumerate(dl):
+                start_event, end_event = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+                start_event.record()
                 targets = torch.randint(size=(batch_size,), low=0, high=1000).long().to(rank)
                 batch = batch.to(rank)
                 output = model(batch)
                 loss = loss_fn(output, targets)
                 loss.backward()
                 optimizer.step()
-        # dealing with synchronization issues
-        time.sleep(1.0)
-        t2 = time.time()
+                end_event.record()
+                torch.cuda.synchronize()
+                total_time += start_event.elapsed_time(end_event)
         if rank == 0:
             print(f"The estimated training time for {world_size} gpu/s at batch size "
-                  f"{batch_size} is {round(t2-t1, 3)} seconds")
+                  f"{batch_size} is {round(total_time/1000.0, 3)} seconds")
     cleanup()
 
 
