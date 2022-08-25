@@ -5,8 +5,8 @@ My current rig has 2 GPUs: 3090ti and a 3090 (the 3090 is, unfortunately, in a P
 My CPU is an 11th GEN i9-11900K
 
 I'm using PyTorch version 1.11.0. For Windows I am using the gloo backend for 
-the data distributed parallel experiments, and for Linux (tested on Ubuntu, I
-am using nccl). 
+the data distributed parallel experiments, and for Linux (tested on Ubuntu), I
+am using nccl. 
 
 The benchmark consists of declaring a dataset of random images fed into a ResNet50
 for various batch sizes for 5 epochs.
