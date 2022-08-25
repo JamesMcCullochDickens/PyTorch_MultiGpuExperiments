@@ -1,17 +1,4 @@
-import os
 import torch
-
-# set all gpus as visible
-n_gpus = torch.cuda.device_count()
-visible_devices = ""
-for i in range(n_gpus):
-    if i != n_gpus-1:
-        visible_devices += str(i)+","
-    else:
-        visible_devices += str(i)
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DECIVES"] = visible_devices
-
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import torch.optim as optim
@@ -67,7 +54,7 @@ def train(rank, world_size):
     model = DDP(model, device_ids=[rank])
 
     # declare the training params
-    batch_sizes = [2, 4, 8, 16, 32]
+    batch_sizes = [4, 8, 16, 20]
     num_epochs = 5
 
     for batch_size in batch_sizes:
@@ -84,7 +71,6 @@ def train(rank, world_size):
         # the training loop
         for epoch_num in range(num_epochs):
             for batch_num, batch in enumerate(dl):
-                # load targets to the gpu, compute the loss and backpropagate
                 targets = torch.randint(size=(batch_size,), low=0, high=1000).long().to(rank)
                 batch = batch.cuda()
                 output = model(batch)
@@ -93,7 +79,7 @@ def train(rank, world_size):
                 optimizer.step()
 
         # dealing with synchronization issues
-        time.sleep(4.0)
+        time.sleep(1.0)
         t2 = time.time()
 
         if rank == 0:
@@ -105,4 +91,3 @@ def train(rank, world_size):
 if __name__ == "__main__":
     world_size = torch.cuda.device_count()
     spawn_processes(train, world_size)
-
