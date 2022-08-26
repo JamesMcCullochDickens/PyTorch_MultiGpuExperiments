@@ -11,6 +11,7 @@ am using nccl (there are some issues with nccl hanging, will investigate more la
 The benchmark consists of declaring a dataset of random images fed into a ResNet50
 for various batch sizes for 5 epochs, 1000 random images of size 600*600
 
+These results were with Ubuntu 22.04 LTS. 
 
 **** Results for Single GPU training ****
 
