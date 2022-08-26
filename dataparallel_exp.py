@@ -6,7 +6,7 @@ from torchvision.models import resnet50
 
 
 class RandomImagesDataloader(Dataset):
-    def __init__(self, num_images=500, height=600, width=600, num_channels=3):
+    def __init__(self, num_images=1000, height=600, width=600, num_channels=3):
         self.num_images = num_images
         self.dataset = torch.randn(num_images, num_channels, height, width)
         self.len = num_images
@@ -26,7 +26,7 @@ def sample_train(n_gpus):
         model = nn.DataParallel(model, device_ids).cuda()
     else:
         model = model.cuda()
-    batch_sizes = [4, 8, 16, 20]
+    batch_sizes = [8, 16]
     num_epochs = 5
     # warmup iterations
     for i in range(10):
@@ -49,6 +49,7 @@ def sample_train(n_gpus):
                 loss = loss_fn(output, targets)
                 loss.backward()
                 optimizer.step()
+                optimizer.zero_grad()
                 end_event.record()
                 torch.cuda.synchronize()
                 total_time += start_event.elapsed_time(end_event)
